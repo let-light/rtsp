@@ -50,7 +50,6 @@ func (serv *Serv) decodeRtpRtcp(buf []byte) (int, error) {
 }
 
 func (serv *Serv) Feed(buf []byte) (int, error) {
-
 	if len(buf) == 0 {
 		serv.logger.Warnf("rtsp feed empty data")
 		return 0, nil
@@ -132,7 +131,6 @@ func (serv *Serv) handleRequest(req *Request) error {
 }
 
 func (serv *Serv) OptionsProcess(req *Request) error {
-	serv.logger.Debugf("rtsp options")
 	resp := serv.NewResponse(req.CSeq(), StatusOK).Option()
 	resp.SetOptions([]string{
 		"OPTIONS",
@@ -150,7 +148,6 @@ func (serv *Serv) OptionsProcess(req *Request) error {
 }
 
 func (serv *Serv) DescribeProcess(req *Request) error {
-	serv.logger.Debugf("rtsp describe")
 	select {
 	case desc := <-serv.descChan:
 		serv.logger.Debugf("rtsp describe get desc: %s", desc)
@@ -167,8 +164,6 @@ func (serv *Serv) DescribeProcess(req *Request) error {
 }
 
 func (serv *Serv) AnnounceProcess(req *Request) error {
-	serv.logger.Debugf("rtsp Announce")
-
 	contentType := req.Announce().ContentType()
 	if contentType != "application/sdp" {
 		return serv.WriteResponseStatus(req.CSeq(), StatusUnsupportedMediaType)

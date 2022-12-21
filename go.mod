@@ -1,4 +1,4 @@
-module rtsp
+module github.com/let-light/rtsp
 
 go 1.18
 
