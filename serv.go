@@ -17,27 +17,32 @@ const (
 	TeardownState
 )
 
+type ServOptions struct {
+	IdleTimeout time.Duration `json:"idleTimeout,omitempty" p:"idleTimeout"` // idle timeout
+	Logger      Logger
+	Write       WriteHandler
+}
+
 type Serv struct {
 	ss          IServSession
-	logger      Logger
 	state       State
 	cseqCounter int
 	pool        *goPool.Pool
-	write       WriteHandler
 	descChan    chan string
 	url         string
+	options     ServOptions
 }
 
-func NewServ(ss IServSession, logger Logger, write WriteHandler) *Serv {
+func NewServ(ss IServSession, options ServOptions) *Serv {
 
 	return &Serv{
 		ss:          ss,
-		logger:      logger,
 		state:       EmptyState,
 		cseqCounter: 0,
 		pool:        goPool.Default(),
-		write:       write,
 		descChan:    make(chan string, 1),
+		url:         "",
+		options:     options,
 	}
 }
 
@@ -51,7 +56,7 @@ func (serv *Serv) decodeRtpRtcp(buf []byte) (int, error) {
 
 func (serv *Serv) Feed(buf []byte) (int, error) {
 	if len(buf) == 0 {
-		serv.logger.Warnf("rtsp feed empty data")
+		serv.options.Logger.Warnf("rtsp feed empty data")
 		return 0, nil
 	}
 
@@ -87,12 +92,12 @@ func (serv *Serv) SetDescribe(desc string) {
 func (serv *Serv) handleRequest(req *Request) error {
 	defer func() {
 		if err := recover(); err != nil {
-			serv.logger.Errorf("handleRequest panic: %v", err)
+			serv.options.Logger.Errorf("handleRequest panic: %v", err)
 		}
 	}()
 
 	serv.pool.Submit(func() {
-		serv.logger.Debugf("rtsp request: %s", req.String())
+		serv.options.Logger.Debugf("rtsp request: %s", req.String())
 
 		if serv.url == "" {
 			serv.url = req.Url()
@@ -123,7 +128,7 @@ func (serv *Serv) handleRequest(req *Request) error {
 		}
 
 		if err != nil {
-			serv.logger.Errorf("rtsp request error: %s", err.Error())
+			serv.options.Logger.Errorf("rtsp request error: %s", err.Error())
 			return
 		}
 	})
@@ -148,17 +153,24 @@ func (serv *Serv) OptionsProcess(req *Request) error {
 }
 
 func (serv *Serv) DescribeProcess(req *Request) error {
+	if serv.ss.GetEventListener() != nil {
+		if err := serv.ss.GetEventListener().OnDescribe(serv); err != nil {
+			serv.options.Logger.Errorf("rtsp describe error: %s", err.Error())
+			return serv.WriteResponseStatus(req.CSeq(), StatusForbidden)
+		}
+	}
+
 	select {
 	case desc := <-serv.descChan:
-		serv.logger.Debugf("rtsp describe get desc: %s", desc)
+		serv.options.Logger.Debugf("rtsp describe get desc: %s", desc)
 		resp := serv.NewResponse(req.CSeq(), StatusOK).Describe()
 		resp.SetContentType("application/sdp")
 		resp.SetContentBase(serv.url)
 		resp.SetContent(desc)
 		return serv.WriteResponse(resp)
 
-	case <-time.After(10 * time.Second):
-		serv.logger.Debugf("rtsp describe timeout")
+	case <-time.After(serv.options.IdleTimeout * time.Second):
+		serv.options.Logger.Debugf("rtsp describe timeout")
 		return serv.WriteResponseStatus(req.CSeq(), StatusNotFound)
 	}
 }
@@ -169,11 +181,18 @@ func (serv *Serv) AnnounceProcess(req *Request) error {
 		return serv.WriteResponseStatus(req.CSeq(), StatusUnsupportedMediaType)
 	}
 
+	if serv.ss.GetEventListener() != nil {
+		if err := serv.ss.GetEventListener().OnAnnounce(serv); err != nil {
+			serv.options.Logger.Errorf("rtsp announce error: %s", err.Error())
+			return serv.WriteResponseStatus(req.CSeq(), StatusForbidden)
+		}
+	}
+
 	return serv.WriteResponse(serv.NewResponse(req.CSeq(), StatusOK))
 }
 
 func (serv *Serv) SetupProcess(req *Request) error {
-	serv.logger.Debugf("rtsp setup")
+	serv.options.Logger.Debugf("rtsp setup")
 	return nil
 }
 
@@ -214,9 +233,9 @@ func (serv *Serv) NewResponse(cseq int, status Status) *Response {
 }
 
 func (serv *Serv) WriteResponse(resp IResponse) error {
-	return serv.write([]byte(resp.String()))
+	return serv.options.Write([]byte(resp.String()))
 }
 
 func (serv *Serv) WriteResponseStatus(cseq int, status Status) error {
-	return serv.write([]byte(serv.NewResponse(cseq, status).String()))
+	return serv.WriteResponse(serv.NewResponse(cseq, status))
 }

@@ -45,4 +45,7 @@ type Options struct {
 
 	// Multicore enables/disables the multi-core execution.
 	Multicore bool
+
+	// IdleTimeout is the maximum duration for the connection to be idle.
+	IdleTimeout time.Duration
 }

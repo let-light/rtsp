@@ -73,8 +73,12 @@ func (s *Server) OnShutdown(gs gnet.Server) {
 func (s *Server) OnOpened(c gnet.Conn) (out []byte, action gnet.Action) {
 	session := s.provider.NewOrGet()
 	sc := &servConn{
-		Serv: NewServ(session, s.opt.Logger, func(data []byte) error {
-			return c.AsyncWrite(data)
+		Serv: NewServ(session, ServOptions{
+			Logger:      s.opt.Logger,
+			IdleTimeout: s.opt.IdleTimeout,
+			Write: func(data []byte) error {
+				return c.AsyncWrite(data)
+			},
 		}),
 		c: c,
 	}

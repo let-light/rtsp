@@ -26,27 +26,27 @@ func (ts *TestServer) OnShutdown(s *rtsp.Server) {
 	fmt.Println("server shutdown")
 }
 
-func (ts *TestServer) OnPlay(ss *rtsp.IServSession) error {
-	fmt.Println("play")
+func (ts *TestServer) OnDescribe(serv *rtsp.Serv) error {
+	fmt.Println("describe")
 	return nil
 }
 
-func (ts *TestServer) OnPublish(ss *rtsp.IServSession) error {
-	fmt.Println("publish")
+func (ts *TestServer) OnAnnounce(serv *rtsp.Serv) error {
+	fmt.Println("announce")
 	return nil
 }
 
-func (ts *TestServer) OnPause(ss *rtsp.IServSession) error {
+func (ts *TestServer) OnPause(serv *rtsp.Serv) error {
 	fmt.Println("pause")
 	return nil
 }
 
-func (ts *TestServer) OnResume(ss *rtsp.IServSession) error {
+func (ts *TestServer) OnResume(serv *rtsp.Serv) error {
 	fmt.Println("resume")
 	return nil
 }
 
-func (ts *TestServer) OnStream(ss *rtsp.IServSession) error {
+func (ts *TestServer) OnStream(serv *rtsp.Serv) error {
 	fmt.Println("stream")
 	return nil
 }

@@ -3,18 +3,19 @@ package rtsp
 import "sync"
 
 type IServSessionEventListener interface {
-	OnPlay(ss *IServSession) error
-	OnPublish(ss *IServSession) error
-	OnPause(ss *IServSession) error
-	OnResume(ss *IServSession) error
-	OnStream(ss *IServSession) error
+	OnDescribe(serv *Serv) error
+	OnAnnounce(serv *Serv) error
+	OnPause(serv *Serv) error
+	OnResume(serv *Serv) error
+	OnStream(serv *Serv) error
 }
 
 type IServSession interface {
 	AddParams(k, v interface{})
 	GetParams(k interface{}) (interface{}, bool)
 	DeleteParams(k interface{})
-	EvehtHandler() IServSessionEventListener
+	SetEventListener(listener IServSessionEventListener)
+	GetEventListener() IServSessionEventListener
 }
 
 type ServSession struct {
@@ -40,6 +41,10 @@ func (ss *ServSession) DeleteParams(k interface{}) {
 	ss.params.Delete(k)
 }
 
-func (ss *ServSession) EvehtHandler() IServSessionEventListener {
+func (ss *ServSession) SetEventListener(listener IServSessionEventListener) {
+	ss.listener = listener
+}
+
+func (ss *ServSession) GetEventListener() IServSessionEventListener {
 	return ss.listener
 }
