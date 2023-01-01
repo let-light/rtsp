@@ -48,11 +48,10 @@ type IRequest interface {
 func UnmarshalRequest(buf []byte) (*Request, int, error) {
 	headerEndOffset := bytes.Index(buf, []byte("\r\n\r\n"))
 	if headerEndOffset == -1 {
-		return nil, -1, fmt.Errorf("incomplete packet, %s", string(buf))
+		return nil, 0, nil
 	}
 
-	headerEndOffset += 2
-	endOffset := headerEndOffset + 2
+	endOffset := headerEndOffset + 4
 
 	contentLength := 0
 
@@ -69,7 +68,6 @@ func UnmarshalRequest(buf []byte) (*Request, int, error) {
 	methodLine := lines[0]
 	methodLineParts := bytes.Split(methodLine, []byte(" "))
 	if len(methodLineParts) != 3 {
-
 		return nil, endOffset, fmt.Errorf("invalid method line: %s", string(methodLine))
 	}
 
@@ -78,7 +76,7 @@ func UnmarshalRequest(buf []byte) (*Request, int, error) {
 	req.version = strings.ToLower(string(methodLineParts[2]))
 
 	// parse other lines
-	for _, line := range lines {
+	for _, line := range lines[1:] {
 		if len(line) == 0 {
 			continue
 		}
@@ -97,14 +95,21 @@ func UnmarshalRequest(buf []byte) (*Request, int, error) {
 			var err error
 			contentLength, err = strconv.Atoi(value)
 			if err != nil {
-				return nil, headerEndOffset + 4, err
+				return nil, endOffset, err
 			}
 		}
 	}
 
-	req.content = buf[headerEndOffset+4 : headerEndOffset+4+contentLength]
+	if contentLength > len(buf[endOffset:]) {
+		return nil, 0, nil
+	}
 
-	endOffset += contentLength
+	req.content = make([]byte, contentLength)
+
+	if contentLength > 0 {
+		req.content = append(req.content, buf[endOffset:endOffset+contentLength]...)
+		endOffset += contentLength
+	}
 
 	return req, endOffset, nil
 }
@@ -161,7 +166,15 @@ func (req *Request) SetLine(key, value string) {
 }
 
 func (req *Request) String() string {
-	return req.method + " " + req.url + " " + req.version + "\r\n" + req.lines.String() + "\r\n" + string(req.content)
+	ret := req.method + " " + req.url + " " + req.version + "\r\n" +
+		req.lines.String() +
+		"\r\n"
+
+	if len(req.content) > 0 {
+		ret = ret + string(req.content)
+	}
+
+	return ret
 }
 
 func (req *Request) CSeq() int {
@@ -301,11 +314,7 @@ func (req *SetupRequest) Transport() (*Transport, error) {
 }
 
 func (req *SetupRequest) SetTransport(transport *Transport) {
-	transportStr, err := transport.String()
-	if err != nil {
-		return
-	}
-	req.SetLine("transport", transportStr)
+	req.SetLine("transport", transport.String())
 }
 
 // PlayRequest is a RTSP PLAY request

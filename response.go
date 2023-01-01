@@ -5,13 +5,14 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type IResponse interface {
 	String() string
 	CSeq() int
 	Session() string
-	Transport() (*Transport, error)
+	//	Transport() (*Transport, error)
 	ContentLength() int
 	Expires() string
 	LastModified() string
@@ -31,7 +32,24 @@ type Response struct {
 	content   []byte
 }
 
+func NewResponse(cseq int, status Status) *Response {
+	resp := &Response{
+		version:   "RTSP/1.0",
+		status:    status,
+		statusStr: status.String(),
+		lines: HeaderLines{
+			"CSeq":           strconv.Itoa(cseq),
+			"Date":           time.Now().Format(time.RFC1123),
+			"Content-Length": strconv.Itoa(0),
+			"Server":         "Neon-RTSP",
+		},
+	}
+
+	return resp
+}
+
 func (resp *Response) String() string {
+	resp.lines["Content-Length"] = strconv.Itoa(len(resp.content))
 	return resp.version + " " + strconv.Itoa(int(resp.status)) + " " + resp.status.String() + "\r\n" +
 		resp.lines.String() + "\r\n" +
 		string(resp.content)
@@ -125,12 +143,6 @@ func (resp *Response) Session() string {
 	return resp.lines["session"]
 }
 
-func (resp *Response) Transport() (*Transport, error) {
-	transportLine := resp.lines["transport"]
-
-	return UnmarshalTransport(transportLine)
-}
-
 func (resp *Response) Expires() string {
 	return resp.lines["expires"]
 }
@@ -213,4 +225,28 @@ func (resp *DescribeResponse) SetContentType(contentType string) {
 
 func (resp *DescribeResponse) SetContentBase(base string) {
 	resp.SetLine("content-base", base)
+}
+
+type SetupResponse struct {
+	IResponse
+}
+
+func NewSetupResponse(cseq int, status Status, transport *Transport) *SetupResponse {
+	resp := &SetupResponse{
+		IResponse: NewResponse(cseq, status),
+	}
+
+	resp.SetTransport(transport)
+
+	return resp
+}
+
+func (resp *SetupResponse) Transport() (*Transport, error) {
+	transportLine := resp.Line("transport")
+
+	return UnmarshalTransport(transportLine)
+}
+
+func (resp *SetupResponse) SetTransport(transport *Transport) {
+	resp.SetLine("transport", transport.String())
 }

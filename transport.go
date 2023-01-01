@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-type TransportMode int
+type TransportType int
 type RtpProfile int
 
 const (
-	TransportModeTcp TransportMode = iota
-	TransportModeUdp
+	TransportTypeTcp TransportType = iota
+	TransportTypeUdp
 )
 
 const (
@@ -24,26 +24,27 @@ const (
 )
 
 const (
-	RtpProfileAVPStr   = "RTP/AVP"
-	RtpProfileAVPFStr  = "RTP/AVPF"
-	RtpProfileSAVPStr  = "RTP/SAVP"
-	RtpProfileSAVPFStr = "RTP/SAVPF"
+	RtpProfileAVPStr   = "rtp/avp"
+	RtpProfileAVPFStr  = "rtp/avpf"
+	RtpProfileSAVPStr  = "rtp/savp"
+	RtpProfileSAVPFStr = "rtp/savpf"
 )
 
 type Transport struct {
 	profile      RtpProfile
-	mode         TransportMode
+	ty           TransportType
 	interleaveds []int
 	unicast      bool
 	clientPorts  []int
 	serverPorts  []int
 	ssrc         int64
+	mode         string
 }
 
 func NewUdpTransport(profile RtpProfile, clientPorts []int) *Transport {
 	return &Transport{
 		profile:     profile,
-		mode:        TransportModeUdp,
+		ty:          TransportTypeUdp,
 		unicast:     true,
 		clientPorts: clientPorts,
 	}
@@ -52,7 +53,7 @@ func NewUdpTransport(profile RtpProfile, clientPorts []int) *Transport {
 func NewTcpTransport(profile RtpProfile, interleaveds []int) *Transport {
 	return &Transport{
 		profile:      profile,
-		mode:         TransportModeTcp,
+		ty:           TransportTypeTcp,
 		interleaveds: interleaveds,
 	}
 }
@@ -87,23 +88,19 @@ func (r *RtpProfile) Parse(s string) error {
 		return nil
 	}
 
-	return errors.New("invalid rtp profile")
+	return fmt.Errorf("invalid rtp profile %s", s)
 }
 
 func (t *Transport) SetSSRC(s int32) {
 	t.ssrc = int64(s)
 }
 
-func (t *Transport) String() (string, error) {
+func (t *Transport) String() string {
 	s := "Transport: "
-
-	if t.profile == RtpProfileInvalid {
-		return "", errors.New("invalid rtp profile")
-	}
 
 	s += t.profile.String()
 
-	if t.mode == TransportModeTcp {
+	if t.ty == TransportTypeTcp {
 		s += "TCP;"
 
 		s += "interleaved="
@@ -144,23 +141,23 @@ func (t *Transport) String() (string, error) {
 		s += fmt.Sprintf(";ssrc=%x", t.ssrc)
 	}
 
-	return s, nil
+	return s
 }
 
 func UnmarshalTransport(s string) (*Transport, error) {
 	t := &Transport{
 		profile:      RtpProfileInvalid,
-		mode:         TransportModeUdp,
-		interleaveds: make([]int, 0),
+		ty:           TransportTypeUdp,
+		interleaveds: make([]int, 2),
 		unicast:      true,
-		clientPorts:  make([]int, 0),
-		serverPorts:  make([]int, 0),
+		clientPorts:  make([]int, 2),
+		serverPorts:  make([]int, 2),
 		ssrc:         0,
 	}
 
-	parts := strings.Split(s, ";")
+	kvs := strings.Split(s, ";")
 
-	for _, p := range parts {
+	for _, p := range kvs {
 		var key, val string
 		kv := strings.Split(p, "=")
 		if len(kv) == 2 {
@@ -173,49 +170,55 @@ func UnmarshalTransport(s string) (*Transport, error) {
 				iv := strings.Split(val, "-")
 				if len(iv) == 2 {
 					t.interleaveds[0], _ = strconv.Atoi(iv[0])
-					t.interleaveds[1], _ = strconv.Atoi(iv[0])
+					t.interleaveds[1], _ = strconv.Atoi(iv[1])
 
-					t.mode = TransportModeTcp
+					t.ty = TransportTypeTcp
 				}
 
 			case "client_port":
 				iv := strings.Split(val, "-")
 				if len(iv) == 2 {
 					t.clientPorts[0], _ = strconv.Atoi(iv[0])
-					t.clientPorts[1], _ = strconv.Atoi(iv[0])
+					t.clientPorts[1], _ = strconv.Atoi(iv[1])
 
-					t.mode = TransportModeUdp
+					t.ty = TransportTypeUdp
 				}
 
 			case "server_port":
 				iv := strings.Split(val, "-")
 				if len(iv) == 2 {
 					t.clientPorts[0], _ = strconv.Atoi(iv[0])
-					t.clientPorts[1], _ = strconv.Atoi(iv[0])
+					t.clientPorts[1], _ = strconv.Atoi(iv[1])
 
-					t.mode = TransportModeUdp
+					t.ty = TransportTypeUdp
 				}
 
 			case "ssrc":
 				t.ssrc, _ = strconv.ParseInt(val, 16, 32)
+
+			case "mode":
+				t.mode = val
 			}
 
 		} else {
 			key = strings.ToLower(p)
 
 			if strings.Contains(key, "rtp/") {
-				t.profile.Parse(key)
+				err := t.profile.Parse(key)
+				if err != nil {
+					return nil, err
+				}
 			} else if strings.Contains(key, "unicast") {
 				t.unicast = true
 			}
 		}
 	}
 
-	if t.mode == TransportModeUdp && len(t.clientPorts) != 2 {
+	if t.ty == TransportTypeUdp && len(t.clientPorts) != 2 {
 		return nil, errors.New("invalid transport ports")
 	}
 
-	if t.mode == TransportModeTcp && len(t.interleaveds) != 2 {
+	if t.ty == TransportTypeTcp && len(t.interleaveds) != 2 {
 		return nil, errors.New("invalid transport interleaved")
 	}
 
@@ -223,9 +226,9 @@ func UnmarshalTransport(s string) (*Transport, error) {
 		return nil, errors.New("invalid rtp profile")
 	}
 
-	if t.ssrc == 0 {
-		return nil, errors.New("invalid ssrc")
-	}
+	// if t.ssrc == 0 {
+	// 	return nil, errors.New("invalid ssrc")
+	// }
 
 	return t, nil
 }
