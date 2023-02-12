@@ -48,6 +48,7 @@ func (s *Server) Run() error {
 		Codec:            s,
 	}
 
+	s.opt.Logger.Infof("server is running on %s", s.addr)
 	err := gnet.Serve(s, s.addr, gnet.WithOptions(opt))
 	if err != nil {
 		return err
@@ -74,7 +75,7 @@ func (s *Server) OnOpened(c gnet.Conn) (out []byte, action gnet.Action) {
 	session := s.provider.NewOrGet()
 	sc := &servConn{
 		Serv: NewServ(session, ServOptions{
-			Logger:      s.opt.Logger,
+			Logger:      session.Logger(),
 			IdleTimeout: s.opt.IdleTimeout,
 			Write: func(data []byte) error {
 				return c.AsyncWrite(data)

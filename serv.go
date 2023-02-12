@@ -1,12 +1,10 @@
 package rtsp
 
 import (
-	"bytes"
-	"fmt"
-	"runtime"
 	"time"
 
 	goPool "github.com/panjf2000/gnet/pkg/pool/goroutine"
+	"github.com/pion/sdp/v3"
 )
 
 const (
@@ -33,7 +31,7 @@ type Serv struct {
 	descChan    chan string
 	url         string
 	options     ServOptions
-	desc        string
+	desc        []byte
 }
 
 func NewServ(ss IServSession, options ServOptions) *Serv {
@@ -90,19 +88,6 @@ func (serv *Serv) Feed(buf []byte) (int, error) {
 
 func (serv *Serv) SetDescribe(desc string) {
 	serv.descChan <- desc
-}
-
-func PanicTrace(err interface{}) string {
-	buf := new(bytes.Buffer)
-	fmt.Fprintf(buf, "%v\n", err)
-	for i := 1; ; i++ {
-		pc, file, line, ok := runtime.Caller(i)
-		if !ok {
-			break
-		}
-		fmt.Fprintf(buf, "%s:%d (0x%x)\n", file, line, pc)
-	}
-	return buf.String()
 }
 
 func (serv *Serv) handleRequest(req *Request) error {
@@ -205,6 +190,12 @@ func (serv *Serv) AnnounceProcess(req *Request) error {
 
 	serv.desc = req.GetContent()
 
+	var sd sdp.SessionDescription
+	if err := sd.Unmarshal([]byte(serv.desc)); err != nil {
+		serv.Logger().Errorf("rtsp announce error: %s", err.Error())
+		return serv.WriteResponseStatus(req.CSeq(), StatusBadRequest)
+	}
+
 	if serv.ss.GetEventListener() != nil {
 		if err := serv.ss.GetEventListener().OnAnnounce(serv); err != nil {
 			serv.Logger().Errorf("rtsp announce error: %s", err.Error())
@@ -256,7 +247,7 @@ func (serv *Serv) WriteResponseStatus(cseq int, status Status) error {
 	return serv.WriteResponse(NewResponse(cseq, status))
 }
 
-func (serv *Serv) GetDescription() string {
+func (serv *Serv) GetDescription() []byte {
 	return serv.desc
 }
 

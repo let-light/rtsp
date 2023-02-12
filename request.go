@@ -41,7 +41,7 @@ type IRequest interface {
 	CSeq() int
 	Session() string
 	ContentType() string
-	GetContent() string
+	GetContent() []byte
 	SetContent(content string)
 }
 
@@ -104,7 +104,7 @@ func UnmarshalRequest(buf []byte) (*Request, int, error) {
 		return nil, 0, nil
 	}
 
-	req.content = make([]byte, contentLength)
+	req.content = make([]byte, 0)
 
 	if contentLength > 0 {
 		req.content = append(req.content, buf[endOffset:endOffset+contentLength]...)
@@ -204,8 +204,8 @@ func (req *Request) SetContent(content string) {
 	req.lines["Content-Length"] = strconv.Itoa(len(content))
 }
 
-func (req *Request) GetContent() string {
-	return string(req.content)
+func (req *Request) GetContent() []byte {
+	return req.content
 }
 
 func (req *Request) Option() *OptionsRequest {
@@ -345,37 +345,9 @@ type GetParameterRequest struct {
 	IRequest
 }
 
-func (req *GetParameterRequest) Parameters() []string {
-	content := req.GetContent()
-	if len(content) == 0 {
-		return nil
-	}
-
-	return strings.Split(content, "\r\n")
-}
-
 // SetParameterRequest is a RTSP SET_PARAMETER request
 type SetParameterRequest struct {
 	IRequest
-}
-
-func (req *SetParameterRequest) Parameters() map[string]string {
-	if len(req.GetContent()) == 0 {
-		return nil
-	}
-
-	lines := strings.Split(string(req.GetContent()), "\r\n")
-	params := make(map[string]string)
-	for _, line := range lines {
-		parts := strings.Split(line, ":")
-		if len(parts) != 2 {
-			continue
-		}
-
-		params[parts[0]] = parts[1]
-	}
-
-	return params
 }
 
 // RecordRequest is a RTSP RECORD request

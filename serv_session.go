@@ -16,6 +16,7 @@ type IServSession interface {
 	DeleteParams(k interface{})
 	SetEventListener(listener IServSessionEventListener)
 	GetEventListener() IServSessionEventListener
+	Logger() Logger
 }
 
 type ServSession struct {
@@ -47,4 +48,8 @@ func (ss *ServSession) SetEventListener(listener IServSessionEventListener) {
 
 func (ss *ServSession) GetEventListener() IServSessionEventListener {
 	return ss.listener
+}
+
+func (ss *ServSession) Logger() Logger {
+	return nil
 }

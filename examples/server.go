@@ -9,9 +9,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type TestServer struct{}
+type TestServer struct {
+	logger *logrus.Logger
+}
 type TestSession struct {
 	*rtsp.ServSession
+	logger *logrus.Entry
+}
+
+func (s *TestSession) Logger() rtsp.Logger {
+	return s.logger
 }
 
 func (ts *TestServer) OnConnect(ss rtsp.IServSession) {
@@ -33,6 +40,7 @@ func (ts *TestServer) OnDescribe(serv *rtsp.Serv) error {
 
 func (ts *TestServer) OnAnnounce(serv *rtsp.Serv) error {
 	fmt.Println("announce")
+
 	return nil
 }
 
@@ -52,12 +60,17 @@ func (ts *TestServer) OnStream(serv *rtsp.Serv) error {
 }
 
 func (ts *TestServer) NewOrGet() rtsp.IServSession {
-	return &TestSession{ServSession: rtsp.NewServSession(ts)}
+	return &TestSession{
+		ServSession: rtsp.NewServSession(ts),
+		logger:      ts.logger.WithFields(logrus.Fields{"session": "test"}),
+	}
 }
 
 func main() {
-	ts := &TestServer{}
 	log := logrus.New()
+	ts := &TestServer{
+		logger: log,
+	}
 	log.SetLevel(logrus.DebugLevel)
 	log.SetOutput(os.Stdout)
 	s, err := rtsp.NewServer(ts, ts, ":8554", rtsp.Options{
